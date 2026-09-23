@@ -72,7 +72,7 @@ const Application = () => {
 
     try {
       const { data } = await axios.post(
-        "${IMPORT.META.ENV.VITE_API_URL}/application/post",
+        `${import.meta.env.VITE_API_URL}/application/post`,
         formData,
         {
           withCredentials: true,

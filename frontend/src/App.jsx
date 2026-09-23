@@ -23,7 +23,7 @@ const App = () => {
     const fetchUser = async () => {
       try {
         const response = await axios.get(
-          `${import.meta.env.${IMPORT.META.ENV.VITE_API_URL}}/user/getuser`,
+          `${import.meta.env.VITE_API_URL}}/user/getuser`,
           {
             withCredentials: true,
           }

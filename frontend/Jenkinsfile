@@ -14,7 +14,7 @@ pipeline {
             steps {
                 echo "Clone React Job Portal Frontend from Main Branch"
 
-                git branch: 'main', url: 'https://github.com/fahimS19/job-portal-jenkins-practice.git'
+                git branch: 'main', url: 'https://github.com/fahimS19/job-portal-jenkins-final'
 
                 sh 'ls -lah'
             }
@@ -49,8 +49,6 @@ pipeline {
                         # COPY .env ./
 
                         COPY . .
-
-                        ADD https://github.com/bjithassanrazib/three-tier-application/blob/main/README.md /bjit/KICKME.md
 
                         RUN adduser --disabled-password --gecos "" bjit
 

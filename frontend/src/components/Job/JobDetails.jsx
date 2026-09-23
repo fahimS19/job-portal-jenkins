@@ -12,7 +12,7 @@ const JobDetails = () => {
 
   useEffect(() => {
     axios
-      .get(`${IMPORT.META.ENV.VITE_API_URL}/job/${id}`, {
+      .get(`${import.meta.env.VITE_API_URL}/job/${id}`, {
         withCredentials: true,
       })
       .then((res) => {
