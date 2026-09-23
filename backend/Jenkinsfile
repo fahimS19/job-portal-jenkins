@@ -1,0 +1,109 @@
+pipeline {
+    agent any
+
+    environment {
+        IMAGE_TAG = "${env.BUILD_NUMBER}"
+        PREVIOUS_TAG = "${env.BUILD_NUMBER.toInteger() - 1}"
+        PROJECT_NAME = 'react-job-portal-backend'
+        PORT = '4000'
+        DB_URL=mongodb = '//admin:securepassword@host.docker.internal:27017/jobportal?authSource=admin'
+        JWT_SECRET_KEY= 'fgjfgsudgfudnhfousidfnewuikfmlewf'
+        JWT_EXPIRE= '7d'
+        COOKIE_EXPIRE= '7'
+        NODE_ENV= 'development'
+        CLOUDINARY_API_KEY= '819224586478434'
+        CLOUDINARY_API_SECRET= 'yr_TbbT_JDG2Xfu4KcrrcykeJvA'
+        CLOUDINARY_CLOUD_NAME= 'dtgsdprcl'
+        FRONTEND_URL= 'http://localhost:8081'
+    }
+
+    stages {
+        stage('Clone Repository') {
+            steps {
+                echo 'Clone React Job Portal Backend from Main Branch'
+
+                git branch: 'main', url: 'https://github.com/fahimS19/job-portal-jenkins-practice.git'
+
+                sh 'ls -lah'
+            }
+        }
+        stage('prepare configuration file') {
+            steps {
+                dir('backend') {
+                    sh 'ls -lah'
+                    
+                    echo '📝 Creating Multi-Stage Project Configuration dynamically...'
+
+                    writeFile file: 'Dockerfile', text: """
+                    # --- Stage 1: Build & Dependencies ---
+                    FROM node:20-alpine AS builder
+                    WORKDIR /app
+                    COPY package*.json ./
+                    RUN npm ci --only=production
+
+                    # --- Stage 2: Final Production Runtime ---
+
+                    FROM node:20-alpine AS runner
+                    WORKDIR /app
+                    
+                    # Only pull the node_modules and code from the builder stage
+
+                    COPY --from=builder /app/node_modules ./node_modules
+                    COPY . .
+
+                    EXPOSE 4000
+                    CMD [ "node", "server.js" ]
+
+                    """
+                }
+            }
+        }
+        stage('Build Docker Image...') {
+            steps {
+                dir('backend') {
+                    script {
+                        echo '🔨 Building Docker image with Buildx...'
+
+                        sh """
+                            # Ensure buildx is available
+                            docker --version
+
+                            docker build -t ${env.PROJECT_NAME}:v${env.IMAGE_TAG} .
+
+                            echo "✅ Docker image built successfully"
+
+                            docker images -a
+                        """
+                    }
+                }
+            }
+        }
+        stage('Run our Frontend') {
+            steps {
+                echo "Deleting previous running container -- ${env.PROJECT_NAME}-v${env.PREVIOUS_TAG}"
+                sh "docker rm -f ${env.PROJECT_NAME}-v${env.PREVIOUS_TAG}"
+                sh "  docker run -d \
+                -p 8082:${env.PORT} \
+                --name ${env.PROJECT_NAME}-v${env.IMAGE_TAG} \
+                -e PORT=${env.PORT} \
+                -e DB_URL='${env.DB_URL}' \
+                -e JWT_SECRET_KEY='${env.JWT_SECRET_KEY}' \
+                -e JWT_EXPIRE='${env.JWT_EXPIRE}' \
+                -e COOKIE_EXPIRE='${env.COOKIE_EXPIRE}' \
+                -e NODE_ENV='${env.NODE_ENV}' \
+                -e CLOUDINARY_API_KEY='${env.CLOUDINARY_API_KEY}' \
+                -e CLOUDINARY_API_SECRET='${env.CLOUDINARY_API_SECRET}' \
+                -e CLOUDINARY_CLOUD_NAME='${env.CLOUDINARY_CLOUD_NAME}' \
+                -e FRONTEND_URL='${env.FRONTEND_URL}' \
+                ${env.PROJECT_NAME}:v${env.IMAGE_TAG}"
+                sleep(10)
+            }
+        }
+        stage('Check our Frontend Container running status log') {
+            steps {
+                sh "docker logs ${env.PROJECT_NAME}-v${env.IMAGE_TAG}"
+            }
+        }
+    }
+}
+
