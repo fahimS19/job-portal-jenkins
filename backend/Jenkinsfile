@@ -2,11 +2,12 @@ pipeline {
     agent any
 
     environment {
+      
         IMAGE_TAG = "${env.BUILD_NUMBER}"
         PREVIOUS_TAG = "${env.BUILD_NUMBER.toInteger() - 1}"
         PROJECT_NAME = 'react-job-portal-backend'
         PORT = '4000'
-        DB_URL=mongodb = '//admin:securepassword@host.docker.internal:27017/jobportal?authSource=admin'
+        DB_URL = 'mongodb://admin:securepassword@host.docker.internal:27017/jobportal?authSource=admin'
         JWT_SECRET_KEY= 'fgjfgsudgfudnhfousidfnewuikfmlewf'
         JWT_EXPIRE= '7d'
         COOKIE_EXPIRE= '7'
@@ -83,6 +84,7 @@ pipeline {
                 echo "Deleting previous running container -- ${env.PROJECT_NAME}-v${env.PREVIOUS_TAG}"
                 sh "docker rm -f ${env.PROJECT_NAME}-v${env.PREVIOUS_TAG}"
                 sh "  docker run -d \
+                --add-host=host.docker.internal:host-gateway \
                 -p 8082:${env.PORT} \
                 --name ${env.PROJECT_NAME}-v${env.IMAGE_TAG} \
                 -e PORT=${env.PORT} \
