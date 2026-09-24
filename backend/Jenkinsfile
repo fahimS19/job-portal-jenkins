@@ -81,7 +81,7 @@ pipeline {
                 }
             }
         }
-        stage('Run our Backend') {
+        stage('Running our Backend') {
             steps {
                 echo "Deleting previous running container -- ${env.PROJECT_NAME}-v${env.PREVIOUS_TAG}"
                 sh "docker rm -f ${env.PROJECT_NAME}-v${env.PREVIOUS_TAG}"
