@@ -14,7 +14,9 @@ pipeline {
             steps {
                 echo "Clone React Job Portal Frontend from Main Branch"
 
-                git branch: 'main', url: 'https://github.com/fahimS19/job-portal-jenkins-final'
+                 git branch: 'main', 
+                    url: 'https://github.com/fahimS19/job-portal-jenkins-final',
+                    credentialsId: 'react-portal-private-repo'
 
                 sh 'ls -lah'
             }

@@ -23,7 +23,9 @@ pipeline {
             steps {
                 echo 'Clone React Job Portal Backend from Main Branch'
 
-                git branch: 'main', url: 'https://github.com/fahimS19/job-portal-jenkins-final'
+                git branch: 'main', 
+                    url: 'https://github.com/fahimS19/job-portal-jenkins-final',
+                    credentialsId: 'react-portal-private-repo'
 
                 sh 'ls -lah'
             }
@@ -79,7 +81,7 @@ pipeline {
                 }
             }
         }
-        stage('Run our Frontend') {
+        stage('Run our Backend') {
             steps {
                 echo "Deleting previous running container -- ${env.PROJECT_NAME}-v${env.PREVIOUS_TAG}"
                 sh "docker rm -f ${env.PROJECT_NAME}-v${env.PREVIOUS_TAG}"
