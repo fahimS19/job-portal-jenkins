@@ -2,9 +2,7 @@ pipeline {
     agent any
 
     environment {
-
         IMAGE_TAG = "${env.BUILD_NUMBER}"
-        PREVIOUS_TAG = "${env.BUILD_NUMBER.toInteger() - 1}"
         PROJECT_NAME = "react-job-portal-fe"
         PORT = "5173"
         ALERT_EMAIL = "fahim@example.com"
@@ -15,14 +13,14 @@ pipeline {
             steps {
                 echo "Clone React Job Portal Frontend from Main Branch"
 
-                 git branch: 'main', 
+                git branch: 'main', 
                     url: 'https://github.com/fahimS19/job-portal-jenkins-final',
-                    credentialsId: 'react-portal-private-reposss'
+                    credentialsId: 'react-portal-private-repo'
 
                 sh 'ls -lah'
             }
-        }z
-        stage('prepare configuration file') {
+        }
+               stage('prepare configuration file') {
             steps {
                 dir('frontend') {
                     sh 'ls -lah'
@@ -31,60 +29,43 @@ pipeline {
                     
                     writeFile file: 'Dockerfile', text: """
                         FROM node:24-slim AS builder
-
                         WORKDIR /bjit
-
                         COPY package*.json ./
-
                         RUN npm install
 
                         FROM node:24-alpine AS production
-
                         WORKDIR /bjit
 
-                        COPY --from=builder /bjit/node_modules ./node_modules
-                        COPY --from=builder /bjit/package*.json ./
+                        # Create the user and set explicit ownership of the root working path
+                        RUN adduser --disabled-password --gecos "" bjit && \
+                            chown bjit:bjit /bjit
 
-                        # COPY src ./src
-                        # COPY public ./public
-                        # COPY index.html ./
-                        # COPY vite.config.js ./
-                        # COPY .env ./
-
-                        COPY . .
-
-                        RUN adduser --disabled-password --gecos "" bjit
-
-                        RUN chown -R bjit:bjit /bjit
+                        # Fast copy operations specifying correct ownership from the start
+                        COPY --chown=bjit:bjit --from=builder /bjit/node_modules ./node_modules
+                        COPY --chown=bjit:bjit --from=builder /bjit/package*.json ./
+                        COPY --chown=bjit:bjit . .
 
                         EXPOSE ${env.PORT}
-
                         USER bjit
 
-                        HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-                        CMD node -e "require('http').get('http://localhost:5000', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }).on('error', () => { process.exit(1); });"
+                        HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+                        CMD node -e "require('http').get('http://localhost:${env.PORT}', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }).on('error', () => { process.exit(1); });"
 
                         CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
-
                     """
                 }
             }
         }
+
         stage('Build Docker Image...') {
             steps {
                 dir('frontend') {
                     script {
-                        echo "🔨 Building Docker image with Buildx..."
-
+                        echo "🔨 Building Docker image..."
                         sh """
-                            # Ensure buildx is available
                             docker --version
-
                             docker build -t ${env.PROJECT_NAME}:v${env.IMAGE_TAG} .
-
                             echo "✅ Docker image built successfully"
-
-                            docker images -a
                         """
                     }
                 }
@@ -92,29 +73,27 @@ pipeline {
         }
         stage('Run our Frontend') {
             steps {
-                echo "Deleting previous running container -- ${env.PROJECT_NAME}-v${env.PREVIOUS_TAG}"
-                sh "docker rm -f ${env.PROJECT_NAME}-v${env.PREVIOUS_TAG}"
-                sh "docker run -d -p 8081:${env.PORT} --name ${env.PROJECT_NAME}-v${env.IMAGE_TAG} ${env.PROJECT_NAME}:v${env.IMAGE_TAG}"
+                echo "Cleaning up any existing container for ${env.PROJECT_NAME}..."
+                // Using || true ensures the pipeline doesn't crash if the container doesn't exist yet
+                sh "docker rm -f ${env.PROJECT_NAME}-active || true"
+                
+                echo "Launching new container version ${env.IMAGE_TAG}..."
+                sh "docker run -d -p 8081:${env.PORT} --name ${env.PROJECT_NAME}-active ${env.PROJECT_NAME}:v${env.IMAGE_TAG}"
                 sleep(10)
             }
         }
         stage('Check our Frontend Container running status log') {
             steps {
-                sh "docker logs ${env.PROJECT_NAME}-v${env.IMAGE_TAG}"
+                sh "docker logs ${env.PROJECT_NAME}-active"
             }
         }
-    
     }
     post {
         always {
             echo "🔁 Pipeline finished with status: ${currentBuild.currentResult}"
-            // Optional: clean the workspace after every run
-            // cleanWs()
         }
-
         success {
-            echo "✅ Deployment successful! I am from success block"
-
+            echo "✅ Deployment successful!"
             emailext(
                 to: "${env.ALERT_EMAIL}",
                 subject: "Jenkins Build SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
@@ -125,10 +104,8 @@ pipeline {
                 """
             )
         }
-
         failure {
-            echo "❌ Deployment failed! I am from failure block"
-
+            echo "❌ Deployment failed!"
             emailext(
                 to: "${env.ALERT_EMAIL}",
                 subject: "Jenkins Build FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
@@ -138,11 +115,9 @@ pipeline {
                     <p>Console: <a href="${env.BUILD_URL}console">${env.BUILD_URL}console</a></p>
                     <p>The full console log is attached.</p>
                 """,
-                attachLog: true,     // attaches build.log
-                compressLog: false   // plain text, not .gz
+                attachLog: true,
+                compressLog: false
             )
         }
-
     }
 }
- 
