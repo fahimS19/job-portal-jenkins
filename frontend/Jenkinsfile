@@ -3,6 +3,7 @@ pipeline {
 
     environment {
         IMAGE_TAG = "${env.BUILD_NUMBER}"
+        PREVIOUS_TAG = "${env.BUILD_NUMBER.toInteger() - 1}"
         PROJECT_NAME = "react-job-portal-fe"
         PORT = "5173"
         ALERT_EMAIL = "fahim@example.com"
@@ -20,7 +21,7 @@ pipeline {
                 sh 'ls -lah'
             }
         }
-               stage('prepare configuration file') {
+        stage('prepare configuration file') {
             steps {
                 dir('frontend') {
                     sh 'ls -lah'
@@ -56,7 +57,49 @@ pipeline {
                 }
             }
         }
+        stage('Secrets detection...') {
+            steps {
+                dir('frontend') {
+                    script {
+                        def rc = sh(script: 'betterleaks dir . --report-path betterleaks.json --report-format json', returnStatus: true)
+                        if (rc != 0) {
+                            unstable("betterleaks found potential secrets (exit ${rc})")
+                        }
 
+                        archiveArtifacts artifacts: 'betterleaks.*', fingerprint: true
+
+                    }
+                }
+            }
+        }
+        stage('SAST Scanning...') {
+            steps {
+                dir('frontend') {
+                    sh "semgrep scan --config auto --json --output=semgrep.json"
+
+                    archiveArtifacts artifacts: 'semgrep.*', fingerprint: true
+                }
+            }
+        }
+        stage('Trivy FS Scan...') {
+            steps {
+                dir('frontend') {
+                    sh '''
+                        trivy fs . \\
+                            --scanners vuln,misconfig,secret \\
+                            --skip-files 'betterleaks.json,semgrep.json,.pkgjson.md5' \\
+                            --format json -o trivy-fs-report.json
+
+                        trivy convert \
+                            --format template \
+                            --template "@/usr/local/share/trivy-html.tpl" \
+                            -o trivy-fs-report.html trivy-fs-report.json
+                    '''
+
+                    archiveArtifacts artifacts: 'trivy-fs-report.*', fingerprint: true
+                }
+            }
+        }
         stage('Build Docker Image...') {
             steps {
                 dir('frontend') {
@@ -68,6 +111,26 @@ pipeline {
                             echo "✅ Docker image built successfully"
                         """
                     }
+                }
+            }
+        }
+         stage('Trivy Image Scan...') {
+            steps {
+                dir('frontend') {
+
+                    sh '''
+                        trivy image \\
+                            --scanners vuln,misconfig,secret \\
+                            --skip-files '**/betterleaks.json,**/semgrep.json' \\
+                            --format json -o trivy-image-report.json "${PROJECT_NAME}:v${IMAGE_TAG}"
+
+                        trivy convert \
+                            --format template \
+                            --template "@/usr/local/share/trivy-html.tpl" \
+                            -o trivy-image-report.html trivy-image-report.json
+                    '''
+
+                    archiveArtifacts artifacts: 'trivy-image-report.*', fingerprint: true
                 }
             }
         }
@@ -94,15 +157,7 @@ pipeline {
         }
         success {
             echo "✅ Deployment successful!"
-            emailext(
-                to: "${env.ALERT_EMAIL}",
-                subject: "Jenkins Build SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                mimeType: 'text/html',
-                body: """
-                    <p>Build <b>${env.JOB_NAME} #${env.BUILD_NUMBER}</b> succeeded.</p>
-                    <p>Details: <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
-                """
-            )
+           
         }
         failure {
             echo "❌ Deployment failed!"
